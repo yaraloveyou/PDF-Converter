@@ -11,11 +11,9 @@ import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.converter.entity.FileEntity;
 import org.converter.repository.FileRepository;
-import org.converter.utils.FileActionConstants;
+import org.converter.utils.FileAction;
 import org.converter.utils.FileExtractor;
 import org.converter.utils.PageExtract;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
@@ -35,7 +33,6 @@ import java.util.zip.ZipOutputStream;
 @Service
 @Primary
 public class FileServiceImpl implements FileService {
-    private static final Logger logger = LoggerFactory.getLogger(FileServiceImpl.class);
     private final FileRepository fileRepository;
 
     @Autowired
@@ -64,7 +61,7 @@ public class FileServiceImpl implements FileService {
         String fileFormat = FileExtractor.extractFormat(file);
         String filename = FileExtractor.extractName(file);
 
-        FileEntity fileEntity = new FileEntity(filename, fileFormat, FileActionConstants.ACTION_CONVERT_PFD_TO_TEXT,
+        FileEntity fileEntity = new FileEntity(filename, fileFormat, FileAction.CONVERT_PDF_TO_TEXT.getActionDescription(),
                 fileContentBytes, file.getSize(), LocalDateTime.now());
 
         fileRepository.save(fileEntity);
@@ -84,7 +81,7 @@ public class FileServiceImpl implements FileService {
             merger.addSource(pdf.getInputStream());
             String filename = FileExtractor.extractName(pdf);
             String fileFormat = FileExtractor.extractFormat(pdf);
-            FileEntity fileEntity = new FileEntity(filename, fileFormat, FileActionConstants.ACTION_MERGE_PDF,
+            FileEntity fileEntity = new FileEntity(filename, fileFormat, FileAction.MERGE_PDF.getActionDescription(),
                     pdf.getBytes(), pdf.getSize(), LocalDateTime.now());
 
             fileRepository.save(fileEntity);
@@ -109,7 +106,7 @@ public class FileServiceImpl implements FileService {
         File outputZipFile = new File(tempDirectory, "split.zip");
         String filename = FileExtractor.extractName(file);
         String fileFormat = FileExtractor.extractFormat(file);
-        FileEntity fileEntity = new FileEntity(filename, fileFormat, FileActionConstants.ACTION_SEPARATION_DPF + parts,
+        FileEntity fileEntity = new FileEntity(filename, fileFormat, FileAction.SEPARATE_PDF.getActionDescription() + parts,
                 file.getBytes(), file.getSize(), LocalDateTime.now());
 
         try (ZipOutputStream zipOutputStream = new ZipOutputStream(FileUtils.openOutputStream(outputZipFile));

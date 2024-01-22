@@ -1,5 +1,6 @@
 package org.converter.controller;
 
+import lombok.extern.slf4j.Slf4j;
 import org.converter.service.FileService;
 import org.converter.utils.FileExtractor;
 import org.slf4j.Logger;
@@ -17,8 +18,8 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/pdf")
+@Slf4j
 public class PdfController {
-    private static final Logger logger = LoggerFactory.getLogger(PdfController.class);
     private final FileService fileService;
 
     @Autowired
@@ -32,7 +33,7 @@ public class PdfController {
             Integer size = fileService.getPageCount(file.getInputStream());
             return ResponseEntity.ok().body(size);
         } catch (Exception ex) {
-            logger.error("Ошибка при расчете количества страниц", ex);
+            log.error("Ошибка при расчете количества страниц", ex);
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(0);
@@ -50,7 +51,7 @@ public class PdfController {
 
             return new ResponseEntity<>(zipBytes, headers, HttpStatus.OK);
         } catch (Exception ex) {
-            logger.error("Ошибка при разделении файлов", ex);
+            log.error("Ошибка при разделении файлов", ex);
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new byte[0]);
@@ -69,7 +70,7 @@ public class PdfController {
 
             return new ResponseEntity<>(textBytes, headers, HttpStatus.OK);
         } catch (IOException ex) {
-            logger.error("Ошибка при конвертации pdf в txt ", ex);
+            log.error("Ошибка при конвертации pdf в txt ", ex);
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new byte[0]);
@@ -88,7 +89,7 @@ public class PdfController {
 
             return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
         } catch (IOException ex) {
-            logger.error("Ошибка при объединении pdf файлов", ex);
+            log.error("Ошибка при объединении pdf файлов", ex);
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new byte[0]);
@@ -107,7 +108,7 @@ public class PdfController {
 
             return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
         } catch (IOException ex) {
-            logger.error("Ошибка при сжатии pdf файла", ex);
+            log.error("Ошибка при сжатии pdf файла", ex);
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new byte[0]);
