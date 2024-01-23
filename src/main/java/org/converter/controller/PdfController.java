@@ -1,6 +1,9 @@
 package org.converter.controller;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.util.Strings;
+import org.converter.config.RedisLock;
+import org.converter.rabbit.Sender;
 import org.converter.service.FileService;
 import org.converter.utils.FileExtractor;
 import org.slf4j.Logger;
@@ -10,6 +13,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -20,11 +24,16 @@ import java.util.List;
 @RequestMapping("/pdf")
 @Slf4j
 public class PdfController {
+
+    RedisLock redisLock;
+    Sender sender;
+    private static final String GENERATE_TASKS_KEY = "converter:controller:pdfcontroller";
     private final FileService fileService;
 
     @Autowired
-    public PdfController(FileService fileService) {
+    public PdfController(FileService fileService, RedisLock redisLock) {
         this.fileService = fileService;
+        this.redisLock = redisLock;
     }
 
     @PostMapping("/upload")
@@ -62,11 +71,11 @@ public class PdfController {
     public ResponseEntity<byte[]> handleConvertPdfToTxt(@RequestParam("file") MultipartFile file)  {
         try {
             byte[] textBytes = fileService.convertPdfToText(file);
-            String filename = file.getName() + ".txt";
+            String fileName = file.getName() + ".txt";
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.TEXT_PLAIN);
-            headers.setContentDispositionFormData("attachment", filename);
+            headers.setContentDispositionFormData("attachment", fileName);
 
             return new ResponseEntity<>(textBytes, headers, HttpStatus.OK);
         } catch (IOException ex) {
@@ -80,14 +89,24 @@ public class PdfController {
     @PostMapping("/merge")
     public ResponseEntity<byte[]> handleMergePdf(@RequestBody List<MultipartFile> files) {
         try {
-            byte[] pdfBytes = fileService.mergePdf(files);
-            String filename = files.get(0).getName() + "_merged.pdf";
+            if (redisLock.acquireLock(200, GENERATE_TASKS_KEY)) {
+                log.info(Strings.repeat("-", 50));
+                log.info("Service start");
+                byte[] pdfBytes = fileService.mergePdf(files);
+                String fileName = files.get(0).getName() + "_merged.pdf";
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_PDF);
-            headers.setContentDispositionFormData("attachment", filename);
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_PDF);
+                headers.setContentDispositionFormData("attachment", fileName);
 
-            return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
+                log.info("Service end");
+                log.info(Strings.repeat("-", 50));
+                redisLock.releaseLock(GENERATE_TASKS_KEY);
+                return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
+            } else {
+                log.warn("Не удалось получить блокировку для задачи: {}", GENERATE_TASKS_KEY);
+                return ResponseEntity.status(HttpStatus.LOCKED).body(new byte[0]);
+            }
         } catch (IOException ex) {
             log.error("Ошибка при объединении pdf файлов", ex);
 
@@ -100,11 +119,11 @@ public class PdfController {
     public ResponseEntity<byte[]> handleCompressionPdf(@RequestParam("file") MultipartFile file, @RequestParam("quality") float quality) {
         try {
             byte[] pdfBytes = fileService.compressionPdf(file, quality);
-            String filename = file.getName() + "_compressed.pdf";
+            String fileName = file.getName() + "_compressed.pdf";
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_PDF);
-            headers.setContentDispositionFormData("attachment", filename);
+            headers.setContentDispositionFormData("attachment", fileName);
 
             return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
         } catch (IOException ex) {

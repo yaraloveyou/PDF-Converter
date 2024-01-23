@@ -1,39 +1,32 @@
 package org.converter.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "files")
 @Data
+@Builder
 @NoArgsConstructor
-public class FileEntity {
-
-    public FileEntity(String filename, String format, String actionTaken, byte[] fileContent,
-                      Long fileSize, LocalDateTime createdAt) {
-        this.filename = filename;
-        this.format = format;
-        this.actionTaken = actionTaken;
-        this.fileContent = fileContent;
-        this.fileSize = fileSize;
-        this.createdAt = createdAt;
-        this.updateAt = createdAt;
-    }
+@AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class FileEntity implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    Long id;
 
-    private String filename;
-    private String format;
-    private String actionTaken;
-    private byte[] fileContent;
-    private Long fileSize;
-    private LocalDateTime createdAt;
-    private LocalDateTime updateAt;
+    String fileName;
+    String format;
+    String actionTaken;
+    @JsonIgnore
+    byte[] fileContent;
+    Long fileSize;
+    LocalDateTime createdAt;
+    LocalDateTime updateAt;
 }

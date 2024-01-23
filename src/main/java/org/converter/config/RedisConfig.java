@@ -29,7 +29,7 @@ public class RedisConfig {
         return new JedisConnectionFactory(redisStandaloneConfiguration);
     }
 
-    // Шаблон, для получения доступа к оперциям Redis
+    // Шаблон для получения доступа к оперциям Redis
     @Bean
     public <F, S>RedisTemplate<F, S> redisTemplate() {
         final RedisTemplate<F, S> redisTemplate = new RedisTemplate<>();

@@ -2,20 +2,22 @@ package org.converter.service;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.pdfbox.cos.COSName;
-import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.multipdf.PDFMergerUtility;
 import org.apache.pdfbox.pdmodel.*;
 import org.apache.pdfbox.pdmodel.graphics.PDXObject;
 import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.converter.config.RedisLock;
 import org.converter.entity.FileEntity;
+import org.converter.rabbit.Sender;
 import org.converter.repository.FileRepository;
 import org.converter.utils.FileAction;
 import org.converter.utils.FileExtractor;
 import org.converter.utils.PageExtract;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Primary;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -34,10 +36,12 @@ import java.util.zip.ZipOutputStream;
 @Primary
 public class FileServiceImpl implements FileService {
     private final FileRepository fileRepository;
+    Sender sender;
 
     @Autowired
-    public FileServiceImpl(FileRepository fileRepository) {
+    public FileServiceImpl(FileRepository fileRepository, Sender sender) {
         this.fileRepository = fileRepository;
+        this.sender = sender;
     }
 
     public List<FileEntity> getAllFiles() {
@@ -57,12 +61,18 @@ public class FileServiceImpl implements FileService {
     }
 
     public byte[] convertPdfToText(MultipartFile file) throws IOException {
-        byte[] fileContentBytes = IOUtils.toByteArray(file.getInputStream());
         String fileFormat = FileExtractor.extractFormat(file);
-        String filename = FileExtractor.extractName(file);
+        String fileName = FileExtractor.extractName(file);
 
-        FileEntity fileEntity = new FileEntity(filename, fileFormat, FileAction.CONVERT_PDF_TO_TEXT.getActionDescription(),
-                fileContentBytes, file.getSize(), LocalDateTime.now());
+        FileEntity fileEntity = FileEntity.builder()
+                .fileName(fileName)
+                .format(fileFormat)
+                .actionTaken(FileAction.MERGE_PDF.getActionDescription())
+                .fileContent(file.getBytes())
+                .fileSize(file.getSize())
+                .createdAt(LocalDateTime.now())
+                .updateAt(LocalDateTime.now())
+                .build();
 
         fileRepository.save(fileEntity);
 
@@ -79,12 +89,20 @@ public class FileServiceImpl implements FileService {
 
         for (MultipartFile pdf : pdfs) {
             merger.addSource(pdf.getInputStream());
-            String filename = FileExtractor.extractName(pdf);
+            String fileName = FileExtractor.extractName(pdf);
             String fileFormat = FileExtractor.extractFormat(pdf);
-            FileEntity fileEntity = new FileEntity(filename, fileFormat, FileAction.MERGE_PDF.getActionDescription(),
-                    pdf.getBytes(), pdf.getSize(), LocalDateTime.now());
+            FileEntity fileEntity = FileEntity.builder()
+                    .fileName(fileName)
+                    .format(fileFormat)
+                    .actionTaken(FileAction.MERGE_PDF.getActionDescription())
+                    .fileContent(pdf.getBytes())
+                    .fileSize(pdf.getSize())
+                    .createdAt(LocalDateTime.now())
+                    .updateAt(LocalDateTime.now())
+                    .build();
 
             fileRepository.save(fileEntity);
+            sender.send(fileEntity);
         }
 
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
@@ -104,10 +122,17 @@ public class FileServiceImpl implements FileService {
     public byte[] separationPdf(MultipartFile file, String parts) throws IOException {
         File tempDirectory = FileUtils.getTempDirectory();
         File outputZipFile = new File(tempDirectory, "split.zip");
-        String filename = FileExtractor.extractName(file);
+        String fileName = FileExtractor.extractName(file);
         String fileFormat = FileExtractor.extractFormat(file);
-        FileEntity fileEntity = new FileEntity(filename, fileFormat, FileAction.SEPARATE_PDF.getActionDescription() + parts,
-                file.getBytes(), file.getSize(), LocalDateTime.now());
+        FileEntity fileEntity = FileEntity.builder()
+                .fileName(fileName)
+                .format(fileFormat)
+                .actionTaken(FileAction.SEPARATE_PDF.getActionDescription() + parts)
+                .fileContent(file.getBytes())
+                .fileSize(file.getSize())
+                .createdAt(LocalDateTime.now())
+                .updateAt(LocalDateTime.now())
+                .build();
 
         try (ZipOutputStream zipOutputStream = new ZipOutputStream(FileUtils.openOutputStream(outputZipFile));
             PDDocument document = PDDocument.load(file.getInputStream())) {
@@ -116,11 +141,11 @@ public class FileServiceImpl implements FileService {
                     continue;
                 PDDocument singlePageDocument = new PDDocument();
                 singlePageDocument.addPage((PDPage) document.getDocumentCatalog().getPages().get(pageNumber));
-                filename = file.getName() + "_" + (pageNumber + 1) + ".pdf";
-                File outputFile = new File(tempDirectory, filename);
+                fileName = file.getName() + "_" + (pageNumber + 1) + ".pdf";
+                File outputFile = new File(tempDirectory, fileName);
                 singlePageDocument.save(outputFile);
 
-                ZipEntry zipEntry = new ZipEntry(filename);
+                ZipEntry zipEntry = new ZipEntry(fileName);
                 zipOutputStream.putNextEntry(zipEntry);
                 FileUtils.copyFile(outputFile, zipOutputStream);
                 zipOutputStream.closeEntry();
